@@ -12,11 +12,12 @@ _  ____/_  /_/ /_  /  / / /  __/_>  <
                                             
 ```
 
+
 **PgMex** is a high-performance PostgreSQL client library for Matlab that enables a Matlab-based application to communicate with PostgreSQL database in the Matlab native way by passing data in a form of matrices, multi-dimensional arrays and structures. The library is written in pure C which gives a significant performance boost for both small and data-heavy database requests. Both Windows and Linux platforms are supported.
 
 This project hosts the documentation available at http://pgmex.alliedtesting.com. 
 
-The docs provides in-depth information on PgMexâ€™s features and is meant to be a guide for Matlab developers integrating their apps with PostgreSQL.
+The docs provides in-depth information on PgMex’s features and is meant to be a guide for Matlab developers integrating their apps with PostgreSQL.
 
 ### Key features
 
@@ -43,6 +44,11 @@ We'll show you sample code on this pane!
 ```
 
 ## API Overview
+
+<aside >
+The following documentation is also available at <a href="https://github.com/AlliedTesting/pgmex-doc">GitHub</a>, please feel free to contribute fixes to any problems or misprints you find.
+</aside>
+
 The library contains of a single package **pgmex** with a single function **pgmexec** designed for execution of various commands like connecting to a database, 
 executing SQL queries on PostgreSQL server etc. The first input to **pgmexec** is always a command name with a few command-specific input parameters to follow.
 
@@ -227,6 +233,3 @@ information, time zone for **timetz** and **timestamptz** values is assumed to b
 UTC. The schema part of the type spec for **PgMex** types is **pgmex**, whereas
 the schema for standard types is **pg_catalog**. However, it is not
 necessary to specify the `pgmex` schema in the field spec string.
-
-
-

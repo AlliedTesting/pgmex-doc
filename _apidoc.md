@@ -40,6 +40,11 @@ We'll show you sample code on this pane!
 ```
 
 ## API Overview
+
+<aside >
+The following documentation is also available at <a href="https://github.com/AlliedTesting/pgmex-doc">GitHub</a>, please feel free to contribute fixes to any problems or misprints you find.
+</aside>
+
 The library contains of a single package **pgmex** with a single function **pgmexec** designed for execution of various commands like connecting to a database, 
 executing SQL queries on PostgreSQL server etc. The first input to **pgmexec** is always a command name with a few command-specific input parameters to follow.
 
@@ -509,7 +514,7 @@ pgmexec('putf',pgParam ,'%text[] %serbytea %serbytea[]',...
 %
 pgmexec('paramClear',pgParam );
 ```
->when extracted via ['getf'](#getf) command with 'serbytea' field specifiecation, 
+>when extracted via ['getf'](#getf) command with 'serbytea' field specification, 
 >struct('arr',[1 2 3]) is automatically de-serialized into Matlab structure
 >the same goes for cell elements provided as values for '%serbytea[]' field specification
 
@@ -554,13 +559,12 @@ none.
 * When the format specifies a numeric type other than **float8 (double)**,
      the input can still be of type **double**, as long as it can be cast
      directly into the specified type. For instance, if the format
-     specifies **int4**, the input can be a whole number of type **double**, such
+     specifies **int4**, the input can be an integer of type **double**, such
      as 5.
 * **pgParam** must be initialized before use; this can be done with a
      call `pgParam=com.allied.pgmex.pgmexec('paramCreate',dbConn)`. **pgParam** does not have to
      be empty; subsequent calls to **putf** will add more values to those
      already there.
-</aside>
 
 
 # Command Execution
@@ -588,7 +592,6 @@ pgResult=com.allied.pgmex.pgmexec('exec',dbConn,command)
      automatically. Otherwise, the result needs to be cleared using the
      **clear** command to avoid memory leaks (even if no tuples were
      returned.)
-</aside>
 
 ## paramExec
 **paramExec** submits a parameterized command to the server and waits for the
@@ -634,6 +637,307 @@ pgmexec('paramClear',pgParam);
 % do something with result...
 pgmexec('clear',res);
 ```
+
+
+## batchParamExec
+**batchParamExec** creates a prepared statement for a given command and executes this statement
+within batch mode on the server for combinations of parameters values.
+
+>Example 1: Insert 100000 tuples, each with an integer, a boolean, a string and an array 1x2 of dates
+
+```matlab
+import com.allied.pgmex.pgmexec;
+SData=struct();
+SData.mytupleno=transpose(int32(1:100000));
+SData.myticker=strcat('foo',cellfun(@num2str,num2cell(transpose(1:100000)),...
+    'UniformOutput',false);
+startDateVec=datenum('1-Jan-2000')+transpose(0:99999);
+SData.mydate_span=[startDateVec startDateVec+30];
+SData.ismytuple=randi([0 1],100000,1); % double, but convertible to bool
+pgmexec('batchParamExec',dbConn,'insert into my_table1 values ($1,$2,$3,$4)',...
+    '%int4 %name %date[] %bool',SData);
+```
+
+>Example 2: Insert 100000 tuples, each with a column array of strings, a serialized function_handle and a double array, prefix for prepared statement is defined
+
+```matlab
+SData=struct();
+SData.mystr_arr=repmat({{'a','b','c'};{'d'};{'e','f'};{}},25000,1);
+SData.myfunc_list=repmat({@sin;@cos},50000,1);
+SData.mymeas_mat=repmat({[1 2];[];[1 3;2 4];0.5;[NaN;Inf]},20000,1);
+% insert mystr_arr as column array due to '@' postfix
+pgmexec('batchParamExec',dbConn,'insert into my_table2 values ($1,$2,$3)',...
+    '%varchar[]@ %serbytea %float8[]',SData,[],[],'my_bpe_prefix');
+```
+
+>Example 3: Insert 100000 tuples, each with an integer and a string, some elements of values are NULL
+
+```matlab
+SData=struct();
+SData.myind=randi([1 10],100000,1); % convertible to int4
+tickerCVec={'aaa';'bb';'cccc'};
+SData.myticker=tickerCVec(randi([1 3],100000,1));
+SIsNull=struct();
+SIsNull.myind=repmat([true;false;false;true],25000,1);
+SIsNull.myticker=logical(randi([0 1],100000,1));
+pgmexec('batchParamExec',dbConn,'insert into my_table3 values ($1,$2)',...
+    '%int4 %name',SData,SIsNull);
+```
+
+>Example 4: Insert 100000 tuples, each with an integer, a string of length 3, a numeric matrix of arbitrary size and a numeric array 1x2x2, some values are NULL as a whole
+
+```matlab
+SData=struct();
+SData.mytupleno=int64(transpose(1:100000));
+currMat=['USD';'EUR';'RUB'];
+SData.mycurr=currMat(randi([1 3],100000,1),:);
+SData.mymeas_mat=repmat({[1 2];[];[1 3;2 4];0.5;[NaN;Inf]},20000,1);
+numMat=cat(1,reshape([1 NaN 0.5 -1],1,2,2),reshape([-Inf 0.25 3 Inf],1,2,2),reshape([NaN 0 3 2.5],1,2,2));
+SData.mynum_mat=numMat(randi([1 3],100000,1),:,:);
+SIsValueNull=struct();
+SIsValueNull.mytupleno=false(100000,1);
+SIsValueNull.mycurr=repmat([true;false;true;true;false],20000,1);
+SIsValueNull.mymeas_mat=logical(randi([0 1],100000,1));
+SIsValueNull.mynum_mat=repmat([true;false],50000,1);
+pgmexec('batchParamExec',dbConn,'insert into my_table4 values ($1,$2,$3,$4)',...
+    '%int8 %varchar %float4[] %float8[]',SData,[],SIsValueNull);
+```
+
+### INPUT:
+#### regular:
+* **dbConn**: uint32 or uint64 [1,1] - database connection, a C pointer
+         to a **PGconn** structure
+* **commandStr**: char [1,N] - SQL command to be executed
+* **fieldSpecStr**: char - specification for types of fields
+* **SData**: struct [1,1] - structure that contains data for all fields
+     of types given in **fieldSpecStr** for all combinations of these fields values.
+     It is assumed that the order of fields in **SData** corresponds to their order
+     in **fieldSpecStr** (for other assumptions see 
+     [RULES](#rules-for-data-and-info-on-nulls) below)
+<aside class="warning">
+The names of fields in **SData** are not important. For example, if INSERT is performed,
+the names of fields in **SData** may be different from those of the affected table.
+</aside>
+
+#### optional:
+* **SIsNull**: empty or struct [1,1] - if non-empty, then structure that allows
+     to determine for each value of each field which elements of this value are NULL
+     (for detailed interpretation of this input as well as for other assumptions see
+     [RULES](#rules-for-data-and-info-on-nulls) below)
+* **SIsValueNull**: empty or struct [1,1] - if non-empty, then structure that allows
+     to determine for each value of each field whether this value is NULL or not
+     (considering the value as a whole, for detailed interpretation of this input and
+     for other assumptions see [RULES](#rules-for-data-and-info-on-nulls) below)
+* **stmtPrefixName**: char [1,] - if given, then non-empty string determining prefix
+     for the name of prepared statement, if not given, assumed to be equal to
+     'batchparamexec'
+
+### OUTPUT:
+none.
+
+### DESCRIPTION
+
+#### WHAT DOES THIS COMMAND DO AND HOW
+
+In essence, **batchParamExec** does the same as several sequential calls of **putf** and **paramExec**
+do (but without creation of **pgParam** through **paramCreate**). The differences are that
+**batchParamExec** 
+
+* is an optimized version of this procedure executed in the so-called batch mode (queries are sent
+to the server in the asynchronous mode not waiting for the response from the server);
+* does not return results.
+
+This may be useful for such commands as INSERT, UPDATE or DELETE, or if some stored procedure
+not returning results are executed on the server for some sufficiently
+large number of parameters values combinations.
+
+#### GENERAL REMARKS
+
+* The command can contain only a single SQL statement (nested function calls or complex SELECT statements are admissible).
+<aside class="warning">
+Server errors (e.g. due to malformed SQL) will trigger exceptions.
+</aside>
+
+* **fieldSpecStr** is formed by the same way it is done for [**putf**](#putf).
+
+* The name of prepared statement is obtained as the value of **stmtPrefixName** concatenated
+     by means of '\_' with the value of a special counter that changes after each execution of
+     **batchParamExec**. For example, if **stmtPrefixName** is not given (default value is used),
+     the name of prepared statement is **batchparamexec\_xxxxxx** with the current value
+     of the counter instead of **xxxxxx**.
+
+          At the end of its execution **batchParamExec** automatically deallocates the created prepared
+     statement. This naming is done this way both to exclude conflicts
+     between calls of **batchParamExec** and to avoid accidental coincidence with the names
+     of prepared statements created by user. Thus, it makes sense to pass **stmtPrefixName**
+     only in the case the latter situation is be excluded. Look at Example 2 to see how this input
+     is to be passed.
+
+#### RULES FOR DATA AND INFO ON NULLS
+
+*  All the fields in **SData** should have the same size along the first dimension. The latter size
+     determines the number of iterations the created prepared statement executes on the server. And
+     each of these executions is parameterized by their own combination of fields values. These values
+     are the corresponding slices of all fields in **SData** for each fixed value of the first index.
+
+* If for some field its type in **fieldSpecStr** is not an array and is of fixed size (i.e. is not represented
+     in Matlab as a string and is not of **bytea**, **serbytea** or **serbytea_wn** types), the values of this
+     field in **SData** should be given as a column vector either of numeric or of logical type (the latter
+     if the type is **bool**). In this case the values of the corresponding parameters for each execution
+     of the command are scalar (each element of the corresponding column vector). 
+     <aside class="notice">
+     The fields **mytupleno** and **ismytuple** of Example 1 above fit this rule.
+     </aside>
+
+>Example 5: Prepare data for tuples, each with a char and a string of length 3
+
+```matlab
+callPutVec=['C';'P'];
+SData.mycall_put=callPutVec(randi([1 2],100000,1)); % use %bpchar in fieldSpecStr
+currMat=['USD';'EUR';'RUB'];
+SData.mycurr=currMat(randi([1 3],100000,1),:); % use %varchar in fieldSpecStr
+```
+
+>Example 6: Prepare data for tuples, each with a numeric array 1x2x2
+
+```matlab
+measMat=cat(1,reshape([1 NaN 0.5 -1],1,2,2),...
+    reshape([-Inf 0.25 3 Inf],1,2,2),...
+    reshape([NaN 0 3 2.5],1,2,2));
+SData.mymeas_mat=measMat(...
+    randi([1 3],100000,1),:,:); % use %float4[] or %float8[] in fieldSpecStr
+```
+
+* If the type of the field specified in **fieldSpecStr** is either an array or is of non-fixed size,
+     three situations are possible. 
+
+     - In the first simple case the data may be represented in **SData**
+     by cell array in the form of column vector such that each cell contains a value of the parameter
+     for the respective execution iteration.
+     <aside class="warning">
+     The way just described above is obligatory in the case of **serbytea** and **serbytea_wn** as well as arrays of these types.
+     </aside>
+     <aside class="notice">
+     The field **myticker** of Example 1 and all the fields of Example 2 above illustrate this rule.
+     </aside>
+
+     - The next situation occurs when the values are represented in **SData** as a two-dimensional matrix (of numeric
+     or char type), but these values are supposed to be scalars of non-fixed size
+     (**bytea** or represented by a string, for instance, **varchar**, **text**, **xml**, etc.).
+     In this case the rows of this matrix represent each of the mentioned values for the parameter. For example,
+     if the type is **varchar**, this way to pass the values of the parameter is possible if these values are strings of
+     equal length, so that these strings can be stacked up one above the other.
+     <aside class="notice">
+     Example 5 above illustrates how **SData** is to be filled in this case.
+     </aside>
+
+     - The third case occurs when the values are given in **SData** as a multidimensional Matlab array (of numeric,
+     logical or char type) in the case the parameter values are of fixed size and of array type. The slices of the field in **SData**
+     corresponding to each fixed value of the first index are these values for each particular execution iteration.
+     And again it is possible only in some special case. Namely, if the values of the parameter for each execution iteration
+     are arrays of the same size along all dimensions, at that their size along first dimension equals 1. Then
+     these arrays are stacked up one above the other to form the value of the corresponding field of **SData** uniting
+     the values of the parameter for all the iterations of statement execution.
+     <aside class="notice">
+     Example 6 above shows how **SData** is to be formed to fit this rule.
+     </aside>
+
+
+* When the format specifies a numeric type other than **float8 (double)**,
+     the values of the corresponding field in **SData** (or the values of each cell if
+     this field in **SData** is a cell array, see the previous item for details when this may be the case)
+     can still be of type **double**, as long as this can be cast directly into the specified type. For instance, if
+     the format specifies **int4**, the corresponding value can be an integer of type **double**, such
+     as 5.
+     <aside class="notice">
+    The field **ismytuple** of Example 1 and the field **myind** of Example 3 above illustrate this rule.
+    </aside>
+
+* If either **SIsNull** or **SIsValueNull** is non-empty, then this input is assumed to be a scalar structure with
+     exactly the same fields (and having the same order within the corresponding structure) as in **SData**.
+     Besides, all the fields should have the same size long first dimension as those of **SData**.
+
+* If **SIsNull** or **SIsValueNull** are given as scalar structures, all the fields in **SIsNull** are expected to be
+     either logical matrices or cell vector of logical matrices, while all the fields of **SIsValueNull** are expected
+     to be plain logical column vectors.
+
+>Example 7: Prepare data and info on NULLs for tuples, each with a string array and an array of numeric matrices
+
+```matlab
+SData=struct();
+SData.myticker_vec=repmat(...
+    {{'aaa','aa'};{'bbbb','bbbbb',''}},...
+    50000,1); % use %varchar[] in fieldSpecStr
+SData.mymeas_mat=repmat(...
+    {[1 2];[1 3;2 4];0.5;[NaN;Inf]},...
+    25000,1); % use %float4[] or %float8[] in fieldSpecStr
+SIsNull=struct();
+SIsNull.myticker_vec=repmat({[false true];false;[false true false]},50000,1);
+SIsNull.mymeas_mat=repmat({[true false];false(2,2);true;[false;true]},25000,1);
+``` 
+
+>Example 8: Prepare data and info on NULLs for tuples, each with a numeric array 1x2x2
+
+```matlab
+SData=struct();
+measMat=cat(1,reshape([1 NaN 0.5 -1],1,2,2),...
+    reshape([-Inf 0.25 3 Inf],1,2,2),...
+    reshape([NaN 0 3 2.5],1,2,2));
+SData.mymeas_mat=measMat(...
+    randi([1 3],100000,1),:,:); % use %float4[] or %float8[] in fieldSpecStr
+SIsNull=struct();
+SIsNull.mymeas_mat=logical(randi([0 1],100000,2,2));
+``` 
+
+* If **SIsNull** is non-empty, the values of the fields in **SIsNull** should correspond to those in **SData**
+     so that the values of each field in **SIsNull** determine what values of the same field in **SData** are NULL.
+
+     - In particular, if some parameter is supposed to have scalar value (i.e. not an array) for each particular
+     iteration of statement execution, the respective field in **SIsNull** should be logical column vector of the length
+     equal to all the sizes of the fields in **SData** along first dimension. Then if some element of this logical vector is true,
+     the corresponding value of the field in **SData** with the same first index is NULL.
+     <aside class="notice">
+     Example 3 above illustrates how **SIsNull** should be formed for the case of scalar values.
+     </aside>
+
+     - Further below in this subitem and the next one we consider only the case when the values of the parameter are assumed
+     to be arrays. Here two situations are possible (mirroring the first and the last situations for fields of **SData**, see above for details).
+     If some field of **SData** is a column cell array (with each cell containing an array with the values of the parameter
+     for the corresponding execution iteration). We stress that namely array types are here under consideration,
+     the case of scalars of non-fixed sizes (such as strings, that also may be represented by cell arrays in **SData**)
+     is described above and does not relate to given situation. So, in this case the field of **SIsNull**
+     should be also a column cell array of the same length as that in **SData**. And the contents of each cell
+     for the field in **SIsNull** should be a logical matrix of the same size as the contents of the respecive cell
+     of the field in **SData**. Thus, elements of each cell for the former cell array point which values of each cell for
+     the latter cell array are NULL.
+     <aside class="notice">
+     Example 7 above shows all the fields of **SIsNull** in this situation.
+     </aside>
+
+     - At last, if the field of **SData** is a multidimensional Matlab array (of numeric, logical or char type), then
+     this field in **SIsNull** should be a logical multidimensional Matlab array of the same size as of the
+     field in **SData**. Then if some element of the logical array in **SIsNull** is true,
+     the corresponding value of the field in **SData** at the same position is NULL.
+     <aside class="notice">
+     Example 8 above illustrates this case for **SIsNull**.
+     </aside>
+
+* If **SIsValueNull** is non-empty, the values of the fields in **SIsValueNull** allow to set NULL for the whole values
+     of the respective parameter for some execution iterations. Namely, for all the indices for which some
+     field in **SIsValueNull** is true, the corresponding parameter of the executed command equals to NULL as
+     a whole, be it a scalar or an array (in contrast to the values of the fields in **SIsNull**, the latter ones
+     in the case of array values can determine which separate elements of each array under consideration are NULL,
+     see above for details). When some element of some field in **SIsValueNull** is true, the values of this field
+     in **SData** and **SIsNull** (if this is non-empty) with the same value of the first index are ignored.
+     <aside class="notice">
+     Example 4 above illustrates how **SIsValueNull** is to be formed.
+     </aside>
+
+<aside class="warning">
+If some parameter is a scalar or an array of **serbytea** type, it is forbidden to set the values of
+the corrsponding field in **SIsNull** or **SIsValueNull** to true. If it is necessary to determine NULL values
+for serialized data, the types connected to **serbytea_wn** should be used instead.
+</aside>
 
 
 ## pqExec
