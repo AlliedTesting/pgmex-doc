@@ -24,14 +24,14 @@ _  ____/_  /_/ /_  /  / / /  __/_>  <
  * Delivers a super-fast and reliable performance with a minimum overhead even for arrays - thanks to 100% binary data transfer between Matlab and PostgreSQL without any text parsing.
  * Linux and Windows binaries.
  * Much faster than JDBC, especially for a large data sets and a large number of calls.
- * 100% binary data transfer between Matlab and PostgreSQL, no text parsing .
+ * 100% binary data transfer between Matlab and PostgreSQL, no text parsing.
  * Supports data exchange in both directions for most of PostgreSQL data types and arrays.
  * Full support for PostgreSQL NULLs for both scalars and arrays, a proper handling of Matlab +Inf/-Inf values.
  * Complex Matlab variables that cannot be mapped directly to PostgreSQL built-in type can be serialized and stored as PostgreSQL 'bytea' using PgMex built-in serialization; when extracted from PostgreSQL, such variables are automatically reconstructed (de-serialized) in Matlab.
  * Simple to use, yet powerful, comprehensive and entirely documented API.
  * We offer a fully functional evaluation version, with a few limitations to an amount of data transferred to DB, a number of extracted fields and a number of sequential calls.
- * Working and tested with any **Matlab** version starting with **2015b** up to the recently released **2016b** on both Linux and Windows platforms.
- * Linked against the latest **PostgreSQL 9.6 libpq** and is compatible with all prior versions of PostgreSQL.
+ * Working and tested with any **Matlab** version starting with **2015b** up to the recently released **2018b** on both Linux and Windows platforms.
+ * Compatible with the latest **PostgreSQL 10** as well as with all prior versions of PostgreSQL.
  * With every purchase, we offer six months of free updates and priority e-mail and forum support.
  * We offer single user (for one developer) and site licenses (for all developers working in the same company). There are no application royalty fees.
 
